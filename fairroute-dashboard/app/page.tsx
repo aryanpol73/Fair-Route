@@ -1,83 +1,161 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { Space_Mono, Inter } from 'next/font/google';
-import * as Recharts from 'recharts';
-import { motion, AnimatePresence } from 'framer-motion';
-import * as Icons from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Zap, Activity, ShieldAlert, Fingerprint, Info } from 'lucide-react';
+// Import your custom components
+import BiasScoreGauge from '../components/BiasScoreGauge';
+import WorkerSimulator from '../components/WorkerSimulator';
+import GeminiNarrative from '../components/GeminiNarrative';
+import FeedbackChart from '../components/FeedbackChart';
+import ManagerPortal from '../components/ManagerPortal';
+import { saveAuditResult } from '../lib/firebase';
 
-const spaceMono = Space_Mono({ subsets: ['latin'], weight: ['400', '700'] });
-const inter = Inter({ subsets: ['latin'] });
+export default function Page() {
+  // --- State ---
+  const [loading, setLoading] = useState(false);
+  const [narrative, setNarrative] = useState("");
+  const [auditData, setAuditData] = useState<any>(null);
 
-export default function DashboardPage() {
-  const [mounted, setMounted] = useState(false);
-  const [recalibrationActive, setRecalibrationActive] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  // --- The Core Logic (Handshake between Python & Gemini) ---
+  const runAudit = async () => {
+    setLoading(true);
+    setNarrative(""); 
+    
+    try {
+      // 1. Fetch live metrics from Python Backend (Port 8000)
+      const pythonRes = await fetch('http://127.0.0.1:8000/audit-dashboard');
+      if (!pythonRes.ok) throw new Error("Python Pipeline Offline");
+      
+      const biasData = await pythonRes.json();
+      setAuditData(biasData);
 
-  useEffect(() => setMounted(true), []);
+      // 2. Fetch AI Explanation from your Gemini Route (/api/analyse)
+      const geminiRes = await fetch('/api/analyse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ biasData }),
+      });
+      
+      const geminiData = await geminiRes.json();
+      if (geminiData.error) throw new Error(geminiData.error);
+      
+      setNarrative(geminiData.narrative);
 
-  if (!mounted) return null;
+      // 3. Save to Firebase History
+      await saveAuditResult({
+        ...biasData,
+        narrative: geminiData.narrative,
+        timestamp: new Date()
+      });
+
+    } catch (err) {
+      console.error("Audit failed:", err);
+      setNarrative("CRITICAL CONNECTION ERROR: Ensure Python (Port 8000) is running and your Gemini API Key is valid.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <main className={`min-h-screen bg-[#0a0a0f] text-slate-300 p-8 ${inter.className}`}>
-      <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-10 gap-8">
+    <main className="min-h-screen bg-[#0a0a0f] text-white p-6 md:p-10 font-sans selection:bg-[#00ff88] selection:text-black">
+      
+      {/* 1. HEADER SECTION (Pure "FairRoute" Branding) */}
+      <header className="flex flex-col md:flex-row justify-between items-center mb-10 border-b border-white/10 pb-8 gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+             <Activity className="text-[#00ff88]" size={28} />
+             <h1 className="text-4xl font-black tracking-tighter uppercase italic">
+               FairRoute
+             </h1>
+          </div>
+          <p className="text-[10px] text-white/30 font-mono tracking-[0.4em] uppercase">
+            Algorithmic Accountability Engine v1.4.0
+          </p>
+        </div>
         
-        {/* LEFT PANEL */}
-        <div className="lg:col-span-6 space-y-6">
-          <header className="flex justify-between items-center border-b border-[#1e1e2e] pb-4">
-            <h1 className="text-xl font-bold tracking-tighter text-white">FAIRROUTE AUDIT SYSTEM</h1>
-            <button 
-              onClick={() => { setIsLoading(true); setTimeout(() => setIsLoading(false), 2000); }}
-              className="px-6 py-2 bg-[#00ff88] text-black font-bold text-xs rounded flex items-center gap-2"
-            >
-              {isLoading ? <Icons.Loader2 className="animate-spin" size={14} /> : <Icons.Zap size={14} />}
-              RUN AUDIT
-            </button>
-          </header>
+        <div className="flex items-center gap-6">
+          <div className="hidden lg:flex flex-col items-end">
+            <span className="text-[10px] text-[#00ff88] font-bold tracking-widest uppercase">System Status: Optimal</span>
+            <span className="text-[9px] text-white/20">Last Sync: Just Now</span>
+          </div>
+          <button 
+            onClick={runAudit}
+            disabled={loading}
+            className="group flex items-center gap-3 bg-[#00ff88] text-black px-10 py-5 rounded-xl font-black hover:shadow-[0_0_30px_rgba(0,255,136,0.4)] transition-all active:scale-95 disabled:opacity-30"
+          >
+            <Zap size={18} fill="black" className={loading ? "animate-spin" : ""} />
+            {loading ? "INITIALIZING PIPELINE..." : "RUN FULL SYSTEM AUDIT"}
+          </button>
+        </div>
+      </header>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-[#12121a] border border-[#1e1e2e] p-6 rounded-xl h-48 flex flex-col items-center justify-center">
-              <span className="text-[10px] text-slate-500 font-bold mb-4 uppercase">Bias Score</span>
-              <div className={`text-5xl font-bold ${spaceMono.className}`}>84.2</div>
-            </div>
-            <div className="bg-[#12121a] border border-[#1e1e2e] p-6 rounded-xl h-48 flex flex-col justify-between">
-              <h3 className="text-sm font-bold flex items-center gap-2"><Icons.ShieldCheck className="text-[#00ff88]" size={16}/> RECALIBRATION</h3>
-              <button 
-                onClick={() => setRecalibrationActive(!recalibrationActive)}
-                className={`w-12 h-6 rounded-full relative transition-colors ${recalibrationActive ? 'bg-[#00ff88]' : 'bg-slate-700'}`}
-              >
-                <motion.div animate={{ x: recalibrationActive ? 24 : 4 }} className="absolute top-1 w-4 h-4 bg-white rounded-full" />
-              </button>
-            </div>
+      {/* 2. THE PREMIUM 3-COLUMN GRID */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        
+        {/* --- LEFT: GAUGES & HISTORY (3/12) --- */}
+        <div className="lg:col-span-3 space-y-8">
+          <div className="bg-[#12121a] p-8 rounded-3xl border border-white/5 shadow-2xl backdrop-blur-md">
+            <BiasScoreGauge score={auditData?.structural_bias_score || 0} />
+          </div>
+
+          <div className="h-[450px]">
+             <ManagerPortal />
           </div>
         </div>
 
-        {/* RIGHT PANEL (Mobile Frame) */}
-        <div className="lg:col-span-4 flex justify-center">
-          <div className="w-[320px] h-[640px] bg-black rounded-[3rem] border-[8px] border-[#1e1e2e] relative overflow-hidden flex flex-col">
-            <div className="flex-1 bg-[#0a0a0f] p-6 pt-12">
-              <div className="flex items-center gap-3 mb-8">
-                <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center"><Icons.User size={20} /></div>
-                <div><h2 className="text-sm font-bold">Zara K.</h2><p className="text-[10px] text-slate-500 uppercase">Zone C • Night</p></div>
-              </div>
-              <div className="p-4 bg-[#12121a] rounded-xl border border-[#1e1e2e] mb-6">
-                <span className="text-[9px] text-slate-500 uppercase">Current Pay</span>
-                <div className={`text-2xl font-bold ${spaceMono.className} ${recalibrationActive ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
-                  ${recalibrationActive ? "448.20" : "304.50"}
+        {/* --- CENTER: AI NARRATIVE & CHART (6/12) --- */}
+        <div className="lg:col-span-6 space-y-8">
+          
+          {/* Advocate Insights Box */}
+          <section className="bg-[#12121a] border border-white/5 p-10 rounded-[2.5rem] min-h-[400px] relative overflow-hidden shadow-2xl">
+            <div className="flex items-center gap-3 mb-8">
+               <Fingerprint className="text-[#00ff88]/40" size={18} />
+               <p className="text-[10px] font-black text-[#00ff88] tracking-[0.2em] uppercase">Advocate Insights (Powered by Gemini)</p>
+            </div>
+            
+            <div className="relative z-10">
+              <GeminiNarrative text={narrative} loading={loading} />
+            </div>
+
+            {/* In-box Data Mini-Stats */}
+            {auditData && (
+              <div className="mt-12 pt-8 border-t border-white/5 grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-[9px] text-white/20 uppercase font-bold tracking-tighter">Causal Gap</p>
+                  <p className="text-xl font-bold text-[#00ff88]">₹{auditData.causal_wage_gap}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] text-white/20 uppercase font-bold tracking-tighter">Poverty Trap</p>
+                  <p className="text-xl font-bold text-blue-400">Week {auditData.poverty_trap_week}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] text-white/20 uppercase font-bold tracking-tighter">Risk Level</p>
+                  <p className="text-xl font-bold text-red-500 italic">CRITICAL</p>
                 </div>
               </div>
-              <div className="h-32 w-full mb-4">
-                <Recharts.ResponsiveContainer width="100%" height="100%">
-                  <Recharts.AreaChart data={[{w:1,v:100},{w:2,v:120},{w:3,v:80}]}>
-                    <Recharts.Area type="monotone" dataKey="v" stroke="#00ff88" fill="#00ff88" fillOpacity={0.1} />
-                  </Recharts.AreaChart>
-                </Recharts.ResponsiveContainer>
-              </div>
-            </div>
+            )}
+          </section>
+
+          {/* Feedback Chart Section */}
+          <div className="h-[400px] bg-[#12121a] rounded-[2.5rem] border border-white/5 overflow-hidden shadow-xl">
+             <FeedbackChart />
           </div>
+        </div>
+
+        {/* --- RIGHT: MOBILE VIEW (3/12) --- */}
+        <div className="lg:col-span-3 sticky top-10">
+          <div className="mb-6 flex items-center justify-between px-2 opacity-30 uppercase font-black text-[10px] tracking-widest">
+            <span>Live Worker View</span>
+            <Info size={14} />
+          </div>
+          <WorkerSimulator />
         </div>
 
       </div>
+
+      <footer className="mt-20 border-t border-white/5 pt-8 text-center opacity-20">
+        <p className="text-[9px] uppercase tracking-[0.6em]">FairRoute AI Ethics Framework • 2026 Google Solution Challenge Submission</p>
+      </footer>
     </main>
   );
 }
