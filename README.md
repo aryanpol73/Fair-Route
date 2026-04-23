@@ -67,13 +67,3 @@ Cross-Platform Integration: Support for major delivery and ride-sharing data sch
 
 🏆 Google Solution Challenge 2026
 Developed with ❤️ to support UN Sustainable Development Goal 8: Decent Work and Economic Growth.
-
-How to add this to GitHub:
-Save the file as README.md.
-
-Run these commands:
-
-Bash
-git add README.md
-git commit -m "docs: add professional README for project mission and setup"
-git push origin main
