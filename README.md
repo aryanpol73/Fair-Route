@@ -1,4 +1,5 @@
 🚀 FairRoute: Algorithmic Accountability Engine
+
 "Making algorithmic bias visible, measurable, and human."
 
 FairRoute is a full-stack AI ethics platform designed to detect and mitigate geographic and demographic bias in gig-worker dispatching algorithms. It bridges the gap between raw data science and empathetic advocacy by combining Causal Inference with Generative AI.
