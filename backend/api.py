@@ -1,7 +1,6 @@
 import pandas as pd
 from flask import Flask, jsonify
 from flask_cors import CORS
-from sklearn.ensemble import IsolationForest
 
 app = Flask(__name__)
 CORS(app)
@@ -9,38 +8,40 @@ CORS(app)
 @app.route('/audit-dashboard', methods=['GET'])
 def get_audit():
     try:
+        # Load real Pune dataset
         df = pd.read_csv('./pune_delivery_dataset.csv')
 
-        # 1. REAL 12-WEEK FEEDBACK LOOP (PDF Feature 1.4)
-        weekly_stats = df.groupby(['week', 'zone'])['weekly_earnings'].mean().unstack()
-        fair_path = weekly_stats['Baner'].fillna(0).tolist()[:12]
-        biased_path = weekly_stats['Kothrud'].fillna(0).tolist()[:12]
-
-        # 2. REAL SPATIAL DENSITY (PDF Feature 3.5)
+        # FEATURE: BEST ZONE CALCULATOR
+        # We find the zone where (Earnings / Tasks) is highest
+        df['yield'] = df['weekly_earnings'] / df['tasks_assigned']
+        yield_stats = df.groupby('zone')['yield'].mean().sort_values(ascending=False)
+        
+        best_zone = yield_stats.index[0]
+        best_yield = round(yield_stats.iloc[0], 2)
+        
+        # FEATURE: SPATIAL DENSITY (For Heatmap)
         zone_counts = df['zone'].value_counts()
         densities = {
             "89964bc": float(zone_counts.get('Baner', 0)),
-            "89964d1": float(zone_counts.get('Kothrud', 0)), # Saturated Cell
+            "89964d1": float(zone_counts.get('Kothrud', 0)),
             "89964af": 15.0,
             "89964ed": 10.0
         }
 
-        # 3. REAL CAUSAL GAP (PDF Feature 1.1)
+        # CAUSAL GAP (Baner vs Kothrud)
         k_avg = df[df['zone'] == 'Kothrud']['weekly_earnings'].mean()
         b_avg = df[df['zone'] == 'Baner']['weekly_earnings'].mean()
         gap = round(abs(b_avg - k_avg), 2)
-        bias_score = min(round((gap / 20), 1), 100)
-        compliance = "NON-COMPLIANT" if bias_score > 60 else "COMPLIANT"
 
         return jsonify({
-            "bias_score": float(bias_score),
+            "bias_score": min(round((gap / 20), 1), 100),
             "wage_gap": float(gap),
-            "penalties": int(len(df[df['rating'] >= 4.2]) * 0.08),
-            "poverty_trap": 14,
-            "fair_path": fair_path,
-            "biased_path": biased_path,
+            "best_zone": best_zone,
+            "best_yield": float(best_yield),
+            "fair_path": df[df['zone'] == 'Baner'].groupby('week')['weekly_earnings'].mean().tolist()[:12],
+            "biased_path": df[df['zone'] == 'Kothrud'].groupby('week')['weekly_earnings'].mean().tolist()[:12],
             "densities": densities,
-            "compliance": compliance
+            "compliance": "NON-COMPLIANT" if gap > 450 else "COMPLIANT"
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500

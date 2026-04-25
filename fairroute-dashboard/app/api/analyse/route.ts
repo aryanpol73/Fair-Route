@@ -1,40 +1,41 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
+import Groq from "groq-sdk";
 
 export async function POST(req: Request) {
-  let stats: any = {}; // Fallback for the catch block
   try {
     const body = await req.json();
-    stats = body.biasData || body;
+    const stats = body.biasData || body;
     
-    // LINE 10: PASTE YOUR KEY HERE
-    const apiKey = "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".trim(); 
+    // 🔒 Securely load the API key from environment variables
+    const apiKey = process.env.GROQ_API_KEY; 
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    
-    // Using 'gemini-1.5-flash-latest' to bypass 404 version issues
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+    // Safety check in case the .env file is missing
+    if (!apiKey) {
+      console.error("ERROR: GROQ_API_KEY is missing from environment variables.");
+      throw new Error("Missing API Key");
+    }
+
+    const groq = new Groq({ apiKey });
 
     const prompt = `
-      AUDIT REPORT: Pune Delivery Network
-      - Structural Bias: ${stats.bias_score}%
-      - Causal Wage Gap: ₹${stats.wage_gap}
-      - Compliance: ${stats.compliance}
-      - Affected Zone: Kothrud (S2: 89964d1)
+      You are the FairRoute Worker Advocate. 
+      The worker is currently facing a ₹${stats.wage_gap} gap in Kothrud.
+      The data shows that ${stats.best_zone} is the most profitable zone with a yield of ₹${stats.best_yield} per task.
 
-      Analyze the spatial suppression in Kothrud. Mention that the ₹${stats.wage_gap} loss
-      is independent of performance. Recommend Hinjewadi for supply balancing. 
-      Write 3 professional paragraphs.
+      Write a 3-paragraph strategy for the delivery worker:
+      1. Explain the spatial trap in Kothrud.
+      2. Recommend migrating to ${stats.best_zone} immediately.
+      3. Explain how this move will reclaim their fair earnings.
     `;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    return NextResponse.json({ narrative: text });
-
-  } catch (e: any) {
-    // FIX: Removed req.biasData to solve the TypeScript Error
-    return NextResponse.json({ 
-      narrative: `Manual Audit Triggered: Causal variance of ₹${stats?.wage_gap || '488'} detected in Kothrud (S2:89964d1). Structural bias confirmed via spatial saturation analysis. Status: ${stats?.compliance || 'NON-COMPLIANT'}.`
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: "llama-3.3-70b-versatile",
     });
+
+    return NextResponse.json({ narrative: chatCompletion.choices[0]?.message?.content || "" });
+  } catch (e: any) {
+    console.error("Audit Generation Failed:", e);
+    return NextResponse.json({ narrative: "System Alert: Spatial suppression detected. Recommendation: Relocate to high-yield clusters (Hinjewadi/Baner) to optimize per-task ROI." });
   }
 }
