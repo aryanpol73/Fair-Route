@@ -53,9 +53,6 @@ npm run dev
 Create a .env.local file in the fairroute-dashboard folder:
 
 Plaintext
-GEMINI_API_KEY=your_key_here
-NEXT_PUBLIC_FIREBASE_API_KEY=your_key_here
-# ... other firebase config
 📈 Impact & Future Scope
 FairRoute aims to set a new standard for Algorithmic Accountability. Future updates will include:
 
