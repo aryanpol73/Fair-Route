@@ -1,13 +1,21 @@
 import type { NextConfig } from "next";
 
+// IMPORTANT: use require instead of import
+// @ts-ignore
+const withPWA = require("next-pwa")({
+  dest: "public",
+  disable: process.env.NODE_ENV !== "production",
+});
+
 const nextConfig: NextConfig = {
-  /* If you use 'export', remember your /api/gemini/route.ts will NOT work.
-     Remove the line below if you want to use Firebase App Hosting (Dynamic).
-  */
-  output: 'export', 
+  reactStrictMode: true,
+
   images: {
-    unoptimized: true, 
+    unoptimized: true,
   },
+
+  // Fix for Next.js 16 Turbopack issue
+  turbopack: {},
 };
 
-export default nextConfig;
+export default withPWA(nextConfig);

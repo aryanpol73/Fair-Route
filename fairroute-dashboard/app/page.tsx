@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from 'react';
-import { Zap, ShieldCheck, Fingerprint, Navigation, TrendingDown } from 'lucide-react';
+import { Zap, ShieldCheck, Fingerprint, Navigation, TrendingDown, Map as MapIcon } from 'lucide-react';
+import { saveAuditResult } from '../lib/firebase';
 
 // Component Imports
 import BiasScoreGaugeImport from '../components/BiasScoreGauge';
@@ -27,12 +28,10 @@ export default function Page() {
   const runAudit = async () => {
     setLoading(true);
     try {
-      // 1. Get Data from Python Backend
       const res = await fetch('http://127.0.0.1:8000/audit-dashboard');
       const data = await res.json();
       setAuditData(data);
       
-      // 2. Fetch AI Strategy Report from Groq/Gemini via Next.js Route
       const groqRes = await fetch('/api/analyse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -40,8 +39,6 @@ export default function Page() {
       });
       const groqData = await groqRes.json();
       
-      // --- BULLETPROOF STRING EXTRACTION ---
-      // This prevents the "Objects are not valid as a React child" crash
       let finalReport = "";
       if (typeof groqData.narrative === 'string') {
         finalReport = groqData.narrative;
@@ -55,6 +52,16 @@ export default function Page() {
       
       setNarrative(finalReport);
 
+      if (data) {
+        await saveAuditResult({
+          biasScore: data.bias_score || 0,
+          wageGap: data.wage_gap || 0,
+          bestZone: data.best_zone || "Baner",
+          bestYield: data.best_yield || 0,
+          compliance: data.compliance || "UNKNOWN"
+        });
+      }
+
     } catch (err) {
       console.error("Audit Error:", err);
       setNarrative("Routing Engine Offline... suggesting Hinjewadi for immediate 12% yield increase.");
@@ -62,6 +69,19 @@ export default function Page() {
       setLoading(false);
     }
   };
+
+  // 🌍 DYNAMIC S2 SPATIAL LOGIC
+  // We map your real zones to fake S2 cell IDs for the visualization
+  const s2Clusters = [
+    { id: '89964bc', zone: 'Baner', type: 'high-yield' },
+    { id: '89964bd', zone: 'Baner', type: 'neutral' },
+    { id: '89964af', zone: 'Hinjewadi', type: 'high-yield' },
+    { id: '89964ae', zone: 'Hinjewadi', type: 'neutral' },
+    { id: '89964d1', zone: 'Kothrud', type: 'suppressed' },
+    { id: '89964d2', zone: 'Kothrud', type: 'suppressed' },
+    { id: '89964ec', zone: 'Zone C', type: 'suppressed' },
+    { id: '89964ed', zone: 'Zone C', type: 'neutral' },
+  ];
 
   return (
     <main className="min-h-screen bg-[#0a0a0f] text-white p-10 font-sans selection:bg-[#00ff88]">
@@ -85,7 +105,7 @@ export default function Page() {
         
         {/* LEFT COLUMN: MANAGER DASHBOARD */}
         <div className="lg:col-span-3 space-y-8">
-          <div className="bg-[#12121a] p-8 rounded-3xl border border-white/5 shadow-2xl">
+          <div className="bg-[#12121a] p-8 rounded-[2rem] border border-white/5 shadow-2xl">
             <h4 className="text-[10px] font-black text-white/20 uppercase mb-6 text-center tracking-widest">Structural Bias</h4>
             <BiasScoreGauge score={auditData?.bias_score || 0} />
             {auditData && (
@@ -102,7 +122,6 @@ export default function Page() {
         {/* CENTER COLUMN: FEED & HEATMAP */}
         <div className="lg:col-span-6 space-y-8">
           
-          {/* CORE DEMO COMPARISON (DYNAMIC) */}
           <PlatformComparison 
             baseValue={auditData?.legacy_base_task_value || 40.00} 
             causalLift={auditData?.best_yield || auditData?.wage_gap || 45.00} 
@@ -117,19 +136,34 @@ export default function Page() {
             <GeminiNarrative text={narrative} loading={loading} />
           </section>
 
-          {/* S2 SPATIAL MONITOR */}
+          {/* 🔥 DYNAMIC S2 SPATIAL MONITOR 🔥 */}
           <div className="bg-[#12121a] border border-white/5 p-8 rounded-[2.5rem] shadow-xl">
-            <div className="grid grid-cols-4 gap-4">
-              {['89964bc', '89964af', '89964ed', '89964d1'].map(cell => {
-                const isBest = cell === '89964bc'; // Map Baner to the grid
-                const isBiased = cell === '89964d1'; 
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3 text-white/30">
+                <MapIcon size={14} className="text-[#00ff88]"/>
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#00ff88]">S2 Cell Routing Matrix</p>
+              </div>
+              <p className="text-[9px] text-white/40 font-mono">
+                TARGET: {auditData?.best_zone ? auditData.best_zone.toUpperCase() : "AWAITING AUDIT"}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-4 gap-3">
+              {s2Clusters.map((cell) => {
+                // Check if this cell belongs to the AI's chosen best zone
+                const isTargetZone = auditData?.best_zone && cell.zone === auditData.best_zone;
+                
                 return (
-                  <div key={cell} className={`p-5 rounded-2xl border transition-all duration-500 relative ${
-                    isBest ? 'border-[#00ff88] bg-[#00ff88]/10 text-[#00ff88]' : 
-                    isBiased ? 'border-red-500 bg-red-500/10 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-white/5 text-white/10'
+                  <div key={cell.id} className={`p-4 rounded-2xl border transition-all duration-700 relative flex flex-col items-center justify-center gap-1 ${
+                    isTargetZone 
+                      ? 'border-[#00ff88] bg-[#00ff88]/10 text-[#00ff88] shadow-[0_0_15px_rgba(0,255,136,0.1)] scale-105' 
+                      : cell.type === 'suppressed'
+                        ? 'border-red-500/30 bg-red-500/5 text-red-500/50' 
+                        : 'border-white/5 text-white/10 bg-white/[0.01]'
                   }`}>
-                    <p className="text-[10px] font-mono tracking-tighter">{cell}</p>
-                    {isBest && <Navigation size={10} className="absolute top-2 right-2 text-[#00ff88]" />}
+                    <p className="text-[10px] font-mono tracking-tighter">{cell.id}</p>
+                    <span className="text-[7px] uppercase tracking-widest opacity-50">{cell.zone}</span>
+                    {isTargetZone && <Navigation size={12} className="absolute top-2 right-2 text-[#00ff88] animate-pulse" />}
                   </div>
                 );
               })}
@@ -146,7 +180,7 @@ export default function Page() {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: WORKER SIMULATOR (MOBILE VIEW) */}
+        {/* RIGHT COLUMN: WORKER SIMULATOR */}
         <div className="lg:col-span-3 sticky top-10">
           <WorkerSimulator 
             gap={auditData?.wage_gap} 
