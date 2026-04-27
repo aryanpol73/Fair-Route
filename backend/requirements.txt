@@ -3,3 +3,4 @@ flask-cors
 pandas
 gunicorn
 dowhy
+numpy<2.0.0
