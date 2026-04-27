@@ -1,6 +1,6 @@
-flask
-flask-cors
-pandas
-gunicorn
+flask==3.0.0
+flask-cors==4.0.0
+pandas==2.1.1
+gunicorn==21.2.0
 dowhy
 numpy<2.0.0

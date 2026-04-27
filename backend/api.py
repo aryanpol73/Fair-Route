@@ -1,68 +1,70 @@
+import os
 import pandas as pd
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)
+# This allows Vercel to talk to Render without any security blocks
+CORS(app, resources={r"/*": {"origins": "*"}})
 
-@app.route('/audit-dashboard', methods=['GET'])
+@app.route('/run-audit', methods=['GET', 'POST'])
 def get_audit():
     try:
-        # Load real Pune dataset
-        df = pd.read_csv('./pune_delivery_dataset.csv')
+        # Load the dataset (Make sure this file is in the SAME folder as api.py on GitHub)
+        # Using a absolute path to avoid "File Not Found" errors on Render
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        csv_path = os.path.join(base_dir, 'pune_delivery_dataset.csv')
+        
+        if not os.path.exists(csv_path):
+            return jsonify({"error": f"CSV file not found at {csv_path}"}), 404
 
-        # FEATURE 1: BEST ZONE CALCULATOR
-        # We find the zone where (Earnings / Tasks) is highest
+        df = pd.read_csv(csv_path)
+
+        # 1. BEST ZONE CALCULATOR
         df['yield'] = df['weekly_earnings'] / df['tasks_assigned']
         yield_stats = df.groupby('zone')['yield'].mean().sort_values(ascending=False)
         
         best_zone = yield_stats.index[0]
         best_yield = round(yield_stats.iloc[0], 2)
-        
-        # We also calculate the overall average yield to show as the "legacy" base value
         average_yield = round(df['yield'].mean(), 2)
         
-        # FEATURE 2: SPATIAL DENSITY (For S2 Cell Visuals)
-        # Using pure dataset values, removing all random/hardcoded numbers
+        # 2. SPATIAL DENSITY
         zone_counts = df['zone'].value_counts()
         densities = {
             "89964bc": float(zone_counts.get('Baner', 0)),
             "89964d1": float(zone_counts.get('Kothrud', 0)),
             "89964af": float(zone_counts.get('Hinjewadi', 0)),
-            "89964ed": float(zone_counts.get('Zone C', 0)) # Or whichever your 4th zone is
+            "89964ed": float(zone_counts.get('Zone C', 0))
         }
 
-        # FEATURE 3: CAUSAL GAP (Best Zone vs Worst Zone)
-        # To make it dynamic, we use the highest yielding zone and lowest yielding zone
+        # 3. CAUSAL GAP
         worst_zone = yield_stats.index[-1]
-        
         b_avg = df[df['zone'] == best_zone]['weekly_earnings'].mean()
         w_avg = df[df['zone'] == worst_zone]['weekly_earnings'].mean()
-        
-        # The true mathematical gap
         gap = round(abs(b_avg - w_avg), 2)
 
-        # FEATURE 4: GRAPH TRAJECTORIES (Up to 14 weeks)
-        # Replaces NaN with 0 so the graph doesn't break
+        # 4. GRAPH TRAJECTORIES (Limiting to 14 weeks)
         fair_path = df[df['zone'] == best_zone].groupby('week')['weekly_earnings'].mean().fillna(0).tolist()[:14]
         biased_path = df[df['zone'] == worst_zone].groupby('week')['weekly_earnings'].mean().fillna(0).tolist()[:14]
 
-        # Final JSON Payload sent to Next.js UI
+        # Return the exact keys the frontend expects
         return jsonify({
-            "bias_score": min(round((gap / 20), 1), 100), # Scales the gap to a 0-100 score
+            "bias_score": min(round((gap / 20), 1), 100),
             "wage_gap": float(gap),
-            "best_zone": best_zone,
+            "best_zone": str(best_zone),
             "best_yield": float(best_yield),
-            "legacy_base_task_value": float(average_yield), # Required by UI Comparison Component
-            "fair_path": [round(x, 2) for x in fair_path], # Rounds lists for clean graph
+            "legacy_base_task_value": float(average_yield),
+            "fair_path": [round(x, 2) for x in fair_path],
             "biased_path": [round(x, 2) for x in biased_path],
             "densities": densities,
             "compliance": "NON-COMPLIANT" if gap > 450 else "COMPLIANT"
         })
 
     except Exception as e:
-        print(f"Server Error: {e}")
-        return jsonify({"error": str(e)}), 500
+        print(f"ERROR: {str(e)}")
+        return jsonify({"error": str(e), "status": "failed"}), 500
 
 if __name__ == "__main__":
-    app.run(port=8000, debug=True)
+    # Render uses Gunicorn, but this is good for local testing
+    port = int(os.environ.get("PORT", 8000))
+    app.run(host='0.0.0.0', port=port)
