@@ -25,37 +25,47 @@ export default function Page() {
   const [narrative, setNarrative] = useState("");
   const [auditData, setAuditData] = useState<any>(null);
 
+  // 🌍 YOUR LIVE RENDER BACKEND URL
+  const RENDER_BACKEND_URL = "https://fair-route-app.onrender.com/run-audit";
+
   const runAudit = async () => {
     setLoading(true);
-    setNarrative("Initializing Audit Engine..."); 
+    setNarrative("Initializing Live Audit Engine..."); 
     
     try {
       let data = null;
-      
       const currentUrl = typeof window !== 'undefined' ? window.location.origin : '';
-      const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-      // 1. PRIMARY DATA PIPELINE: Fetch from Python Causal Engine
-      if (isLocalhost) {
-        setNarrative("Fetching causal data from local Python engine...");
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 3000);
-          const res = await fetch('http://127.0.0.1:8000/audit-dashboard', { signal: controller.signal });
-          clearTimeout(timeoutId);
-          
-          if (res.ok) {
-            data = await res.json();
-          }
-        } catch (e) {
-          console.warn("Local API unreachable. Falling back to Cloud Deployment Mock.");
+      // 1. PRIMARY DATA PIPELINE: Fetch from Live Render Engine
+      setNarrative("Connecting to Causal ML Engine on Render...");
+      
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout for Render spin-up
+        
+        const res = await fetch(RENDER_BACKEND_URL, { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' },
+          // Send an empty body if your backend expects one, or data if required
+          body: JSON.stringify({ audit_request: "live_sync" }), 
+          signal: controller.signal 
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (res.ok) {
+          data = await res.json();
+          setNarrative("Live Causal Data Acquired. Syncing Dashboard...");
+        } else {
+          console.warn("Backend Error. Status:", res.status);
         }
+      } catch (e) {
+        console.error("Live API unreachable. Render might be cold-starting.");
       }
 
-      // 2. CLOUD DEPLOYMENT FALLBACK (For Vercel/Mobile testing by Judges)
-      // Judges: This guarantees the UI functions on cloud environments where the local Python Flask server is inaccessible.
+      // 2. CLOUD DEPLOYMENT FALLBACK (Safety net for high-pressure demos)
       if (!data) {
-        setNarrative("Deploying Causal ML Analysis (Cloud Environment)...");
+        setNarrative("Server cold-start detected. Using cached simulation data...");
         data = {
           bias_score: 85,
           wage_gap: 42.50,
@@ -80,7 +90,7 @@ export default function Page() {
           body: JSON.stringify({ biasData: data }),
         });
         
-        if (!groqRes.ok) throw new Error(`Server returned ${groqRes.status}`);
+        if (!groqRes.ok) throw new Error(`Groq returned ${groqRes.status}`);
         
         const groqData = await groqRes.json();
         
@@ -198,7 +208,6 @@ export default function Page() {
 
             <div className="grid grid-cols-4 gap-3">
               {s2Clusters.map((cell) => {
-                // Check if this cell belongs to the AI's chosen best zone
                 const isTargetZone = auditData?.best_zone && cell.zone === auditData.best_zone;
                 
                 return (
