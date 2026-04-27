@@ -35,7 +35,7 @@ export default function PlatformComparison({ baseValue, causalLift }: Comparison
           <div className="flex justify-between items-start mb-6">
             <div>
               <p className="text-[9px] text-white/30 uppercase font-bold tracking-widest mb-1">Legacy Platform</p>
-              <p className="text-lg font-black text-white/60">Status Quo</p>
+              <p className="text-lg font-black text-white/60">Base Yield</p>
             </div>
             <div className="bg-red-500/10 p-2 rounded-lg">
               <AlertTriangle size={16} className="text-red-500" />
