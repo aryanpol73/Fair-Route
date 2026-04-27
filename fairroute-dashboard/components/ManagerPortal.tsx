@@ -28,6 +28,49 @@ export default function ManagerPortal() {
     return () => unsubscribe();
   }, []);
 
+  const handleExportCSV = () => {
+    if (history.length === 0) {
+      alert("No data available to export.");
+      return;
+    }
+
+    const headers = ["Audit ID", "Timestamp", "Bias Score (%)", "Wage Gap (INR)", "Optimal Zone", "Compliance Status"];
+
+    const csvRows = [];
+    csvRows.push(headers.join(','));
+
+    history.forEach(audit => {
+      let formattedDate = 'N/A';
+      if (audit.timestamp?.toDate) {
+        const dateObj = audit.timestamp.toDate();
+        formattedDate = `${dateObj.toLocaleDateString()} ${dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+      }
+
+      const values = [
+        audit.id,
+        formattedDate,
+        audit.biasScore,
+        audit.wageGap,
+        audit.bestZone,
+        audit.compliance || 'UNKNOWN'
+      ];
+
+      const escapedValues = values.map(val => `"${val}"`);
+      csvRows.push(escapedValues.join(','));
+    });
+
+    const csvString = csvRows.join('\n');
+
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `fairroute_audit_log_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="bg-[#12121a] rounded-[2rem] border border-white/5 overflow-hidden flex flex-col h-[450px] shadow-2xl">
       {/* Header */}
@@ -99,7 +142,10 @@ export default function ManagerPortal() {
 
       {/* Footer */}
       <div className="p-5 bg-black/40 border-t border-white/5">
-        <button className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-[9px] font-black text-white/60 hover:text-white transition-all uppercase tracking-[0.2em]">
+        <button 
+          onClick={handleExportCSV}
+          className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-[9px] font-black text-white/60 hover:text-white transition-all uppercase tracking-[0.2em]"
+        >
           Export Compliance Log (.CSV)
         </button>
       </div>

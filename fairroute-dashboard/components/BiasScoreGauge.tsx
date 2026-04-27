@@ -13,13 +13,17 @@ const BiasScoreGauge: React.FC<BiasScoreGaugeProps> = ({ score }) => {
   const [displayScore, setDisplayScore] = useState(0);
 
   useEffect(() => {
-    // Smoothly animate the number
+    // Smoothly animate the number and gauge
     const timeout = setTimeout(() => setDisplayScore(score), 500);
     return () => clearTimeout(timeout);
   }, [score]);
 
-  // Math for the Needle
-  const rotation = (displayScore / 100) * 180 - 180;
+  // 🔥 THE MATH FIX 🔥
+  // Because the line (x2="-85") inherently points left, 
+  // 0 score = 0 rotation (left). 
+  // 50 score = 90 deg rotation (up). 
+  // 100 score = 180 deg rotation (right).
+  const rotation = (displayScore / 100) * 180;
 
   return (
     <div className="flex flex-col items-center justify-center bg-[#12121a] border border-[#1e1e2e] p-6 rounded-xl h-full w-full min-h-[220px]">
@@ -42,7 +46,7 @@ const BiasScoreGauge: React.FC<BiasScoreGaugeProps> = ({ score }) => {
             className="transition-all duration-1000 ease-out"
           />
 
-          {/* Needle */}
+          {/* 🔥 Needle 🔥 */}
           <g transform={`translate(120, 120) rotate(${rotation})`} className="transition-transform duration-1000 ease-out">
             <line x1="0" y1="0" x2="-85" y2="0" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
             <circle cx="0" cy="0" r="5" fill="#fff" />
@@ -62,7 +66,7 @@ const BiasScoreGauge: React.FC<BiasScoreGaugeProps> = ({ score }) => {
         </svg>
       </div>
 
-      <div className={`mt-4 px-3 py-1 rounded border text-[10px] font-black tracking-widest ${
+      <div className={`mt-4 px-3 py-1 rounded border text-[10px] font-black tracking-widest transition-colors duration-500 ${
         displayScore > 70 ? 'bg-[#ff3366]/10 text-[#ff3366] border-[#ff3366]/30' : 'bg-[#00ff88]/10 text-[#00ff88] border-[#00ff88]/30'
       }`}>
         {displayScore > 70 ? 'CRITICAL ANOMALY' : 'SYSTEM NOMINAL'}
